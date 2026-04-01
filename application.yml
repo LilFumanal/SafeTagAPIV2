@@ -1,0 +1,6 @@
+rpps:
+  baseUrl: https://gateway.api.esante.gouv.fr/fhir/v2
+  apiKey: e360cdfc-f361-4b9e-94da-94e51075cae6
+
+server:
+  port: 8081
