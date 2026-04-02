@@ -1,7 +1,9 @@
 package com.lil.safetag.client;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lil.safetag.exception.RppsExceptions;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -9,17 +11,16 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 public class RppsClient {
 
     private final RestTemplate restTemplate;
     private final RppsProperties properties;
+    private static final ObjectMapper mapper = new ObjectMapper();
 
     public RppsClient(RppsProperties properties) {
         this.restTemplate = new RestTemplate();
@@ -42,10 +43,30 @@ public class RppsClient {
         return response.getBody();
     }
 
-    public List<Map<String, String>> searchByName(String name) {
-        String url = properties.getBaseUrl() + "/Practitioner?name=" + name;
-        String data = callUrl(url);
-        return parsePractitionerBody(data);
+    public List<Map<String, Object>> searchByName(String name) {
+        // 1. Construction de l'URL
+        String url = UriComponentsBuilder.fromUriString(properties.getBaseUrl())
+                .path("/Practitioner")
+                .queryParam("name", name)
+                .build()
+                .toUriString();
+
+        // 2. Appel via ta méthode callUrl (qui gère l'API Key)
+        String jsonResponse = callUrl(url);
+
+        // 3. Traitement de la réponse
+        if (jsonResponse == null || jsonResponse.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        try {
+            // On utilise ton 'mapper' statique existant
+            JsonNode root = mapper.readTree(jsonResponse);
+            return parsePractitioner(root);
+        } catch (JsonProcessingException e) {
+            System.err.println("Erreur de lecture JSON : " + e.getMessage());
+            return Collections.emptyList();
+        }
     }
 
     public Map<String, String> searchPractitionerRole(String practitionnerId) {
@@ -54,58 +75,53 @@ public class RppsClient {
         return parsePractitionerRole(data);
     }
 
-    public List<Map<String, String>> parsePractitionerBody(String response) {
-        List<Map<String, String>> practitioners= new ArrayList<>();
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode root = mapper.readTree(response);
-            JsonNode entries = root.path("entry");
+    public List<Map<String, Object>> parsePractitioner(JsonNode root) {
+        List<Map<String, Object>> practitioners = new ArrayList<>();
 
-            for (JsonNode entry : entries) {
-                JsonNode resource = entry.path("resource");
+        // Plus besoin de mapper.readTree() car le travail est déjà fait
+        JsonNode entries = root.path("entry");
 
-                String id = resource.path("id").asText(null);
+        if (!entries.isArray()) {
+            return practitioners;
+        }
 
-                JsonNode nameNode = resource.path("name").isArray()
-                        ? resource.path("name").get(0)
-                        : null;
+        for (JsonNode entry : entries) {
+            JsonNode resource = entry.path("resource");
+            String id = resource.path("id").asText(null);
 
-                String family = nameNode != null ? nameNode.path("family").asText("") : "";
-                String given = (nameNode != null && nameNode.path("given").isArray())
-                        ? nameNode.path("given").get(0).asText("")
-                        : "";
+            if (id == null) continue;
 
-                String fullName = (family + " " + given).trim();
-                String profession = null;
-                String specialite = null;
+            // Extraction du nom (plus court avec path)
+            JsonNode nameNode = resource.path("name").get(0);
+            String family = nameNode.path("family").asText("");
+            String given = nameNode.path("given").path(0).asText("");
+            String fullName = (family + " " + given).trim();
 
-                JsonNode qualifications = resource.path("qualification");
-                for (JsonNode q : qualifications) {
-                    JsonNode codings = q.path("code").path("coding");
+            List<String> professionCodes = new ArrayList<>();
+            List<String> specialtyCodes = new ArrayList<>();
 
-                    for (JsonNode coding : codings) {
-                        String system = coding.path("system").asText();
+            for (JsonNode q : resource.path("qualification")) {
+                for (JsonNode coding : q.path("code").path("coding")) {
+                    String system = coding.path("system").asText("");
+                    String code = coding.path("code").asText(null);
 
+                    if (code != null) {
                         if (system.contains("TRE_G15")) {
-                            profession = coding.path("display").asText(null);
+                            professionCodes.add(code);
                         } else if (system.contains("TRE_R38")) {
-                            specialite = coding.path("display").asText(null);
+                            specialtyCodes.add(code);
                         }
                     }
                 }
-
-                if (id != null) {
-                    Map<String, String> practitioner = new HashMap<>();
-                    practitioner.put("id", id);
-                    practitioner.put("name", fullName);
-                    practitioner.put("profession", profession);
-                    practitioner.put("specialite", specialite);
-
-                    practitioners.add(practitioner);
-                }
             }
-        } catch (Exception e) {
-            throw new RuntimeException("Erreur parsing RPPS", e);
+
+            Map<String, Object> practitioner = new HashMap<>();
+            practitioner.put("id", id);
+            practitioner.put("name", fullName);
+            practitioner.put("professionCodes", professionCodes);
+            practitioner.put("specialtyCodes", specialtyCodes);
+
+            practitioners.add(practitioner);
         }
         return practitioners;
     }
@@ -157,7 +173,6 @@ public class RppsClient {
                         }
                     }
                 }
-
                 return roleData; // ✅ premier actif uniquement
             }
 

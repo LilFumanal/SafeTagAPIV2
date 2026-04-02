@@ -1,4 +1,4 @@
-package com.example.safetag;
+package com.lil.safetag;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
