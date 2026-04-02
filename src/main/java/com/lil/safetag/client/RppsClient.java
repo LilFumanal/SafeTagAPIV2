@@ -10,6 +10,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -28,20 +30,28 @@ public class RppsClient {
     }
 
     private @Nullable String callUrl(String url) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("ESANTE-API-KEY", properties.getApiKey());
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("ESANTE-API-KEY", properties.getApiKey());
 
-        HttpEntity<Void> entity = new HttpEntity<>(headers);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
 
-        ResponseEntity<String> response = restTemplate.exchange(
-                url,
-                HttpMethod.GET,
-                entity,
-                String.class
-        );
+            return response.getBody();
 
-        return response.getBody();
+        } catch (HttpStatusCodeException e) {
+            if (e.getStatusCode().is4xxClientError()) {
+                if (e.getStatusCode().value() == 404) {
+                    throw new RppsExceptions.NotFoundException("Ressource RPPS non trouvée à l'URL : " + url);
+                }
+                throw new RppsExceptions.BaseException("Erreur client RPPS : " + e.getResponseBodyAsString());
+            }
+            throw new RppsExceptions.CommunicationException("Erreur serveur RPPS lors de l'appel", e);
+        } catch (RestClientException e) {
+            throw new RppsExceptions.CommunicationException("Impossible de contacter l'API RPPS (Timeout ou Réseau)", e);
+        }
     }
+
 
     public List<Map<String, Object>> searchByName(String name) {
         // 1. Construction de l'URL
@@ -64,17 +74,30 @@ public class RppsClient {
             JsonNode root = mapper.readTree(jsonResponse);
             return parsePractitioner(root);
         } catch (JsonProcessingException e) {
-            System.err.println("Erreur de lecture JSON : " + e.getMessage());
-            return Collections.emptyList();
+            throw new RppsExceptions.BaseException("Erreur de formatage JSON lors de la recherche par nom", e);
         }
     }
 
-    public Map<String, String> searchPractitionerRole(String practitionnerId) {
-        String url = properties.getBaseUrl() + "/PractitionerRole?practitioner=" + practitionnerId;
+    public Map<String, String> searchPractitionerRole(String practitionerId) {
+        String url = properties.getBaseUrl() + "/PractitionerRole?practitioner=" + practitionerId;
         String data = callUrl(url);
-        return parsePractitionerRole(data);
+        Map<String, String> role = parsePractitionerRole(data);
+        if (role == null) {
+            throw new RppsExceptions.NotFoundException("Aucun rôle actif trouvé pour le praticien : " + practitionerId);
+        }
+        return role;
     }
 
+    public Map<String, String> searchOrganization(String organizationId) {
+        String url = properties.getBaseUrl() + "/Organization?identifier=" + organizationId;
+        String data = callUrl(url);
+        Map<String, String> org = parseOrganization(data);
+        if (org == null) {
+            throw new RppsExceptions.NotFoundException("Organisation non trouvée : " + organizationId);
+        }
+        return org;
+    }
+    // --- Parsing Methods ---
     public List<Map<String, Object>> parsePractitioner(JsonNode root) {
         List<Map<String, Object>> practitioners = new ArrayList<>();
 
@@ -178,18 +201,9 @@ public class RppsClient {
 
             return null;
 
-        } catch (Exception e) {
-            throw new RuntimeException("Erreur parsing RPPS", e);
+        } catch (JsonProcessingException e) {
+            throw new RppsExceptions.BaseException("Erreur parsing PractitionerRole", e);
         }
-    }
-    public Map<String, String> searchOrganization(String organizationId) {
-        System.out.println(organizationId);
-        String url = properties.getBaseUrl() + "/Organization?identifier=" + organizationId;
-        String data = callUrl(url);
-
-        System.out.println(callUrl(url));
-
-        return parseOrganization(data);
     }
 
     public Map<String, String> parseOrganization(String json) {
@@ -216,8 +230,8 @@ public class RppsClient {
 
             return result;
 
-        } catch (Exception e) {
-            throw new RuntimeException("Erreur parsing Organization RPPS", e);
+        }  catch (JsonProcessingException e) {
+            throw new RppsExceptions.BaseException("Erreur parsing Organization", e);
         }
     }
 }
