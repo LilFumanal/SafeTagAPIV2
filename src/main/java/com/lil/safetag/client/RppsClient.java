@@ -97,6 +97,34 @@ public class RppsClient {
         }
         return org;
     }
+
+    // --- Bulk searches ---
+
+    public List<Map<String, Object>> searchByLocation(String location) {
+        boolean isPostalCode = location.matches("\\d+");
+
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(properties.getBaseUrl())
+                .path("/PractitionerRole")
+                .queryParam("_count", 20)
+                // On demande à l'API d'inclure les données du Praticien lié
+                .queryParam("_include", "PractitionerRole:practitioner");
+
+        builder.queryParam("address", location);
+        System.out.println("Appel RPPS : " + builder.toUriString());
+        String jsonResponse = callUrl(builder.toUriString());
+
+        if (jsonResponse == null || jsonResponse.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        try {
+            JsonNode root = mapper.readTree(jsonResponse);
+            return parsePractitioner(root); // On réutilise ton parseur existant
+        } catch (JsonProcessingException e) {
+            throw new RppsExceptions.BaseException("Erreur parsing recherche localisation", e);
+        }
+    }
+
     // --- Parsing Methods ---
     public List<Map<String, Object>> parsePractitioner(JsonNode root) {
         List<Map<String, Object>> practitioners = new ArrayList<>();
@@ -110,6 +138,7 @@ public class RppsClient {
 
         for (JsonNode entry : entries) {
             JsonNode resource = entry.path("resource");
+            if (!"Practitioner".equals(resource.path("resourceType").asText())) continue;
             String id = resource.path("id").asText(null);
 
             if (id == null) continue;
@@ -230,7 +259,7 @@ public class RppsClient {
 
             return result;
 
-        }  catch (JsonProcessingException e) {
+        } catch (JsonProcessingException e) {
             throw new RppsExceptions.BaseException("Erreur parsing Organization", e);
         }
     }

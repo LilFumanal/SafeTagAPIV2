@@ -24,19 +24,27 @@ public class PractitionerController {
         this.rppsClient = rppsClient;
     }
 
+    @GetMapping("/search")
+    public List<PractitionerDTO> searchByLocation(@RequestParam String location) {
+        List<Map<String, Object>> rawPractitioners = rppsClient.searchByLocation(location);
+        return processAndFilter(rawPractitioners);
+    }
+
+    // On peut aussi modifier l'ancien search pour utiliser cette méthode commune
     @GetMapping
-    public List<PractitionerDTO> search(@RequestParam String name) {
+    public List<PractitionerDTO> searchByName(@RequestParam String name) {
         List<Map<String, Object>> rawPractitioners = rppsClient.searchByName(name);
+        return processAndFilter(rawPractitioners);
+    }
+
+    private List<PractitionerDTO> processAndFilter(List<Map<String, Object>> rawList) {
         List<PractitionerDTO> result = new ArrayList<>();
 
-        for (Map<String, Object> practitionerMap : rawPractitioners) {
-
-            // 1. Filtrage métier (Point 7 & 8 du Decision Log)
+        for (Map<String, Object> practitionerMap : rawList) {
             if (isRelevantPractitioner(practitionerMap)) {
-
                 String id = (String) practitionerMap.get("id");
 
-                // 2. Enrichissement (Appels supplémentaires)
+                // Enrichissement (Appels supplémentaires)
                 Map<String, String> role = rppsClient.searchPractitionerRole(id);
                 Map<String, String> org = null;
 
@@ -47,11 +55,9 @@ public class PractitionerController {
                     }
                 }
 
-                // 3. Mapping vers le DTO (Point 5)
                 result.add(mapToDTO(practitionerMap, role, org));
             }
         }
-
         return result;
     }
 
@@ -76,8 +82,8 @@ public class PractitionerController {
                 (String) raw.get("name"),
                 (List<String>) raw.get("professionCodes"),
                 (List<String>) raw.get("specialtyCodes"),
-                org != null ? org.get("city") : "Non renseigné",
-                org != null ? org.get("postalCode") : "N/A",
+                (List<String>) raw.get("city"),
+                (List<String>) raw.get("postalCode"),
                 role != null ? role.get("modeExercice") : "Inconnu"
         );
     }
