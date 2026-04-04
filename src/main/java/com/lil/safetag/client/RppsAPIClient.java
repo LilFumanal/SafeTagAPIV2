@@ -18,13 +18,13 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.util.*;
 
 @Service
-public class RppsClient {
+public class RppsAPIClient {
 
     private final RestTemplate restTemplate;
     private final RppsProperties properties;
     private static final ObjectMapper mapper = new ObjectMapper();
 
-    public RppsClient(RppsProperties properties) {
+    public RppsAPIClient(RppsProperties properties) {
         this.restTemplate = new RestTemplate();
         this.properties = properties;
     }

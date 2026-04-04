@@ -1,11 +1,13 @@
 package com.lil.safetag.controller;
 
 import com.lil.safetag.client.RppsIngestionService;
+import com.lil.safetag.entity.RppsPractitioner;
+import com.lil.safetag.repository.RppsPractitionerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/rpps")
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class RppsController {
 
     private final RppsIngestionService ingestionService;
+    private final RppsPractitionerRepository repository;
 
     @PostMapping("/import")
     public ResponseEntity<String> triggerImport() {
@@ -27,5 +30,11 @@ public class RppsController {
             e.printStackTrace();
             return ResponseEntity.internalServerError().body("Erreur : " + e.getMessage());
         }
+    }
+    @GetMapping("/{rppsId}")
+    public ResponseEntity<RppsPractitioner> getPractitionerById(@PathVariable String rppsId) {
+        return repository.findByRppsId(rppsId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 }

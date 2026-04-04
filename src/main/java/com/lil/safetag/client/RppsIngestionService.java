@@ -1,5 +1,6 @@
 package com.lil.safetag.client;
 
+import com.lil.safetag.entity.PracticeLocation;
 import com.lil.safetag.entity.RppsPractitioner;
 import com.lil.safetag.repository.RppsPractitionerRepository;
 import com.opencsv.CSVParserBuilder;
@@ -54,9 +55,27 @@ public class RppsIngestionService {
                      .build()) {
 
             String[] row;
+            int lineCount = 0;
             while ((row = csvReader.readNext()) != null) {
+                if (lineCount >= 100) {
+                    System.out.println("[DEBUG] 20 lignes atteintes, arrêt de la lecture.");
+                    break;
+                }
+                String street = String.format("%s %s %s %s",
+                        getValueOrEmpty(row, 28),
+                        getValueOrEmpty(row, 29),
+                        getValueOrEmpty(row, 31),
+                        getValueOrEmpty(row, 32)
+                ).replaceAll("\\s+", " ").trim(); // Nettoie les espaces en trop si une colonne est vide
+
+                PracticeLocation location = new PracticeLocation();
+                location.setFacilityName(getValueOrEmpty(row, 24));
+                location.setStreet(street.isEmpty() ? null : street);
+                location.setZipCode(getValueOrEmpty(row, 35));
+                location.setCity(getValueOrEmpty(row, 37));
+
                 if (isValid(row, processedIds)) {
-                    batch.add(mapToEntity(row));
+                    batch.add(mapToEntity(row,location ));
                     processedIds.add(row[COL_ID_PP]); // On le marque comme "vu"
                 }
 
@@ -66,13 +85,15 @@ public class RppsIngestionService {
                     log.info("Batch sauvegardé. Total : {}", totalSaved);
                     batch.clear();
                 }
-            }
+                lineCount++;
 
+                }
             // Enregistrer le reliquat
             if (!batch.isEmpty()) {
                 repository.saveAll(batch);
                 totalSaved += batch.size();
             }
+
 
             log.info("[SUCCESS] Importation terminée. {} praticiens en base.", totalSaved);
 
@@ -82,7 +103,7 @@ public class RppsIngestionService {
         }
     }
 
-    private RppsPractitioner mapToEntity(String[] row) {
+    private RppsPractitioner mapToEntity(String[] row, PracticeLocation location) {
         RppsPractitioner p = new RppsPractitioner();
         p.setRppsId(row[COL_ID_PP]);
         p.setLastName(row[COL_LASTNAME]);
@@ -90,6 +111,7 @@ public class RppsIngestionService {
         p.setProfessionCode(row[COL_PROFESSION_CODE]);
         p.setSpecialtyCode(row[COL_SPECIALTY_CODE]);
         p.setLastUpdated(LocalDateTime.now());
+        p.addLocation(location);
         return p;
     }
 
@@ -122,5 +144,8 @@ public class RppsIngestionService {
         }
 
         return false;
+    }
+    private String getValueOrEmpty(String[] row, int index) {
+        return (row.length > index && row[index] != null) ? row[index].trim() : "";
     }
 }

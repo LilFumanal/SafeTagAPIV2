@@ -6,6 +6,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "rpps_practitioners")
@@ -27,4 +29,13 @@ public class RppsPractitioner {
 
     // Date de dernière mise à jour pour savoir si la donnée est fraîche
     private LocalDateTime lastUpdated;
+
+    @OneToMany(mappedBy = "practitioner", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PracticeLocation> locations = new ArrayList<>();
+
+    // 2. La méthode utilitaire pour lier les deux côtés facilement
+    public void addLocation(PracticeLocation location) {
+        locations.add(location);
+        location.setPractitioner(this);
+    }
 }

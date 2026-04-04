@@ -1,6 +1,6 @@
 package com.lil.safetag.controller;
 
-import com.lil.safetag.client.RppsClient;
+import com.lil.safetag.client.RppsAPIClient;
 import com.lil.safetag.dto.PractitionerDTO;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,25 +15,25 @@ import java.util.Map;
 @RequestMapping("/practitioners")
 public class PractitionerController {
 
-    private final RppsClient rppsClient;
+    private final RppsAPIClient rppsAPIClient;
     private static final List<String> ALLOWED_ROLES = List.of("10", "93");
     private static final List<String> ALLOWED_SPECIALTIES =
             List.of("SM33", "SM42", "SM43", "SM92", "SM93");
 
-    public PractitionerController(RppsClient rppsClient) {
-        this.rppsClient = rppsClient;
+    public PractitionerController(RppsAPIClient rppsAPIClient) {
+        this.rppsAPIClient = rppsAPIClient;
     }
 
     @GetMapping("/search")
     public List<PractitionerDTO> searchByLocation(@RequestParam String location) {
-        List<Map<String, Object>> rawPractitioners = rppsClient.searchByLocation(location);
+        List<Map<String, Object>> rawPractitioners = rppsAPIClient.searchByLocation(location);
         return processAndFilter(rawPractitioners);
     }
 
     // On peut aussi modifier l'ancien search pour utiliser cette méthode commune
     @GetMapping
     public List<PractitionerDTO> searchByName(@RequestParam String name) {
-        List<Map<String, Object>> rawPractitioners = rppsClient.searchByName(name);
+        List<Map<String, Object>> rawPractitioners = rppsAPIClient.searchByName(name);
         return processAndFilter(rawPractitioners);
     }
 
@@ -45,13 +45,13 @@ public class PractitionerController {
                 String id = (String) practitionerMap.get("id");
 
                 // Enrichissement (Appels supplémentaires)
-                Map<String, String> role = rppsClient.searchPractitionerRole(id);
+                Map<String, String> role = rppsAPIClient.searchPractitionerRole(id);
                 Map<String, String> org = null;
 
                 if (role != null) {
                     String orgId = role.get("organizationId");
                     if (orgId != null) {
-                        org = rppsClient.searchOrganization(orgId);
+                        org = rppsAPIClient.searchOrganization(orgId);
                     }
                 }
 
