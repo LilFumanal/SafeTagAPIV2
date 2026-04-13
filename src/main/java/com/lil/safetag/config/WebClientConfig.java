@@ -26,7 +26,7 @@ public class WebClientConfig {
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
                 // --- C'est ici qu'il faut ajouter la configuration ---
                 .exchangeStrategies(ExchangeStrategies.builder()
-                        .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(1024 * 1024 * 100)) // 100MB par exemple
+                        .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(1024 * 1024 * 200)) // 100MB par exemple
                         .build())
                 .build();
     }
