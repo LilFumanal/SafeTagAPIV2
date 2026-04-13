@@ -17,9 +17,16 @@ public class PracticeLocation {
     private Long id;
 
     private String facilityName;
-    private String street;        // Index 24
-    private String zipCode;      // Index 35
-    private String city;         // Index 37
+    private String streetNumber; // Ajout du champ manquant (String pour supporter les "bis", "ter", etc.)
+    private String street;
+    private String zipCode;
+    private String city;
+    private Double latitude;
+    private Double longitude;
+
+    // Statut de traitement pour éviter les boucles infinies sur les adresses introuvables
+    @Column(nullable = false)
+    private boolean geocodingAttempted = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "practitioner_rpps_id", referencedColumnName = "rppsId")

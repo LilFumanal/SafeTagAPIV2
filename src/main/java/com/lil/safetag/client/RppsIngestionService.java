@@ -22,16 +22,29 @@ import java.util.Set;
 @Slf4j
 public class RppsIngestionService {
 
-    // Constantes métier
-    private static final List<String> ALLOWED_ROLES = List.of("10", "93");
-    private static final List<String> ALLOWED_SPECIALTIES = List.of("SM33", "SM42", "SM43", "SM92", "SM93");
+    // Constantes métier - CODES PROFESSION SANTÉ MENTALE & ADDICTOLOGIE
+    private static final List<String> ALLOWED_ROLES = List.of("10", "93", "94", "95");
 
-    // Index des colonnes
-    private static final int COL_ID_PP = 1;          // Identifiant PP (RPPS)
-    private static final int COL_LASTNAME = 3;       // Nom d'exercice
-    private static final int COL_FIRSTNAME = 4;      // Prénom d'exercice
-    private static final int COL_PROFESSION_CODE = 5; // Code profession (ex: 10, 93)
-    private static final int COL_SPECIALTY_CODE = 11; // Code savoir-faire (Spécialité)
+    // CODES SPÉCIALITÉ/SAVOIR-FAIRE (préfixe SM)
+    private static final List<String> ALLOWED_SPECIALTIES = List.of(
+            "SM04", "SM54", "SM33", "SM93", "SM26", "SM53", "SM70", "SM65"
+    );
+
+    // Index de base
+    private static final int COL_ID_PP = 1;           // Identifiant PP
+    private static final int COL_LASTNAME = 7;        // Nom d'exercice
+    private static final int COL_FIRSTNAME = 8;       // Prénom d'exercice
+    private static final int COL_PROFESSION_CODE = 9; // Code profession
+    private static final int COL_SPECIALTY_CODE = 15; // Code savoir-faire
+
+    // Index d'adresse
+    private static final int COL_FACILITY_NAME = 24;  // Raison sociale (structure)
+    private static final int COL_STREET_NUM = 28;     // Numéro Voie
+    private static final int COL_STREET_REP = 29;     // Indice de répétition (bis, ter...)
+    private static final int COL_STREET_TYPE = 31;    // Libellé type de voie
+    private static final int COL_STREET_NAME = 32;    // Libellé Voie
+    private static final int COL_ZIP_CODE = 35;       // Code postal
+    private static final int COL_CITY = 37;           // Bureau distributeur (Ville)
 
     private static final int BATCH_SIZE = 1000;
     private final RppsPractitionerRepository repository;
@@ -56,46 +69,54 @@ public class RppsIngestionService {
 
             String[] row;
             int lineCount = 0;
+
             while ((row = csvReader.readNext()) != null) {
+                // BLOC DE TEST : Arrêt après 100 lignes
                 if (lineCount >= 100) {
-                    System.out.println("[DEBUG] 20 lignes atteintes, arrêt de la lecture.");
+                    log.info("[DEBUG] 100 lignes atteintes, arrêt de la lecture.");
                     break;
-                }
-                String street = String.format("%s %s %s %s",
-                        getValueOrEmpty(row, 28),
-                        getValueOrEmpty(row, 29),
-                        getValueOrEmpty(row, 31),
-                        getValueOrEmpty(row, 32)
-                ).replaceAll("\\s+", " ").trim(); // Nettoie les espaces en trop si une colonne est vide
-
-                PracticeLocation location = new PracticeLocation();
-                location.setFacilityName(getValueOrEmpty(row, 24));
-                location.setStreet(street.isEmpty() ? null : street);
-                location.setZipCode(getValueOrEmpty(row, 35));
-                location.setCity(getValueOrEmpty(row, 37));
-
-                if (isValid(row, processedIds)) {
-                    batch.add(mapToEntity(row,location ));
-                    processedIds.add(row[COL_ID_PP]); // On le marque comme "vu"
-                }
-
-                if (batch.size() >= BATCH_SIZE) {
-                    repository.saveAll(batch);
-                    totalSaved += batch.size();
-                    log.info("Batch sauvegardé. Total : {}", totalSaved);
-                    batch.clear();
                 }
                 lineCount++;
 
+                // 1. On ignore immédiatement les lignes invalides ou les doublons
+                if (!isValid(row, processedIds)) {
+                    continue;
                 }
-            // Enregistrer le reliquat
+
+                // 2. Formatage des données (uniquement pour les lignes valides)
+                String street = String.format("%s %s %s",
+                        getValueOrEmpty(row, COL_STREET_REP),
+                        getValueOrEmpty(row, COL_STREET_TYPE),
+                        getValueOrEmpty(row, COL_STREET_NAME)
+                ).replaceAll("\\s+", " ").trim();
+
+                PracticeLocation location = new PracticeLocation();
+                location.setStreetNumber(getValueOrEmpty(row, COL_STREET_NUM));
+                location.setFacilityName(getValueOrEmpty(row, COL_FACILITY_NAME));
+                location.setStreet(street.isEmpty() ? null : street);
+                location.setZipCode(getValueOrEmpty(row, COL_ZIP_CODE));
+                location.setCity(getValueOrEmpty(row, COL_CITY));
+
+                // 3. Ajout au batch
+                batch.add(mapToEntity(row, location));
+                processedIds.add(row[COL_ID_PP]);
+
+                // 4. Sauvegarde si le batch est plein
+                if (batch.size() >= BATCH_SIZE) {
+                    repository.saveAll(batch);
+                    totalSaved += batch.size();
+                    log.info("Batch sauvegardé. Total en cours : {}", totalSaved);
+                    batch.clear();
+                }
+            }
+
+            // 5. Enregistrer le reliquat (les derniers éléments qui n'ont pas atteint 1000)
             if (!batch.isEmpty()) {
                 repository.saveAll(batch);
                 totalSaved += batch.size();
             }
 
-
-            log.info("[SUCCESS] Importation terminée. {} praticiens en base.", totalSaved);
+            log.info("[SUCCESS] Importation terminée. {} praticiens insérés ou mis à jour.", totalSaved);
 
         } catch (Exception e) {
             log.error("Erreur critique lors de l'importation", e);
@@ -111,40 +132,37 @@ public class RppsIngestionService {
         p.setProfessionCode(row[COL_PROFESSION_CODE]);
         p.setSpecialtyCode(row[COL_SPECIALTY_CODE]);
         p.setLastUpdated(LocalDateTime.now());
-        p.addLocation(location);
+        p.addLocation(location); // Assure-toi que cette méthode existe bien dans ton entité
         return p;
     }
 
     private boolean isValid(String[] row, Set<String> processedIds) {
-        // 1. Contrôle structurel de la ligne
-        if (row == null || row.length < 13) {
+        if (row == null || row.length < 40) {
             return false;
         }
 
-        // 2. Contrôle anti-doublon
         String rppsId = row[COL_ID_PP];
         if (processedIds.contains(rppsId)) {
             return false;
         }
 
-        // 3. Contrôle métier (Rôle & Spécialité)
         String professionCode = row[COL_PROFESSION_CODE];
-
         if (!ALLOWED_ROLES.contains(professionCode)) {
             return false;
         }
 
         if ("93".equals(professionCode)) {
-            return true; // Les psychologues sont acceptés directement
+            return true;
         }
 
         if ("10".equals(professionCode)) {
             String specialtyCode = row[COL_SPECIALTY_CODE];
-            return ALLOWED_SPECIALTIES.contains(specialtyCode); // Les médecins nécessitent une spécialité précise
+            return ALLOWED_SPECIALTIES.contains(specialtyCode);
         }
 
         return false;
     }
+
     private String getValueOrEmpty(String[] row, int index) {
         return (row.length > index && row[index] != null) ? row[index].trim() : "";
     }
