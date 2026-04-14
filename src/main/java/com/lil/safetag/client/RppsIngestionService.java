@@ -13,21 +13,30 @@ import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @Service
 @Slf4j
 public class RppsIngestionService {
 
     // Constantes métier - CODES PROFESSION SANTÉ MENTALE & ADDICTOLOGIE
+    // 10 = Médecin (inclut psychiatres avec spécialités SM04/SM54)
+    // 93 = Psychologue (titulaire du titre protégé)
+    // 94 = Ergothérapeute (rééducation psychomotrice et cognitive)
+    // 95 = Psychomotricien (troubles psychomoteurs et relationnels)
     private static final List<String> ALLOWED_ROLES = List.of("10", "93", "94", "95");
 
     // CODES SPÉCIALITÉ/SAVOIR-FAIRE (préfixe SM)
+    // SM04 = Psychiatrie générale (adultes)
+    // SM54 = Psychiatrie enfant/ado
+    // SM33 = Addictologie
+    // SM93 = Psychologie clinique
+    // SM26 = Thérapie familiale et de couple
+    // SM53 = Pédopsychiatrie (ancienne dénomination)
+    // SM70 = Sexologie et médecine sexuelle
+    // SM65 = Hypnose médicale thérapeutique
     private static final List<String> ALLOWED_SPECIALTIES = List.of(
-            "SM04", "SM54", "SM33", "SM93", "SM26", "SM53", "SM70", "SM65"
+            "SM04", "SM54", "SM33", "SM93", "SM26", "SM53",  "SM70", "SM65"
     );
 
     // Index de base
@@ -36,6 +45,7 @@ public class RppsIngestionService {
     private static final int COL_FIRSTNAME = 8;       // Prénom d'exercice
     private static final int COL_PROFESSION_CODE = 9; // Code profession
     private static final int COL_SPECIALTY_CODE = 15; // Code savoir-faire
+    private static final int COL_LIBELLE_EXERCICE_MODE = 18; //Libellé mode d'exercice
 
     // Index d'adresse
     private static final int COL_FACILITY_NAME = 24;  // Raison sociale (structure)
@@ -57,8 +67,7 @@ public class RppsIngestionService {
 
     public void importRppsData() {
         log.info("[START] Début de l'importation dans PostgreSQL...");
-        List<RppsPractitioner> batch = new ArrayList<>();
-        Set<String> processedIds = new HashSet<>();
+        Map<String, RppsPractitioner> batchMap = new HashMap<>();
         int totalSaved = 0;
 
         try (InputStream rawStream = csvClient.downloadRppsFile();
@@ -78,11 +87,9 @@ public class RppsIngestionService {
                 }
                 lineCount++;
 
-                // 1. On ignore immédiatement les lignes invalides ou les doublons
-                if (!isValid(row, processedIds)) {
-                    continue;
-                }
+                if (!isValid(row)) continue;
 
+                String rppsId = row[COL_ID_PP];
                 // 2. Formatage des données (uniquement pour les lignes valides)
                 String street = String.format("%s %s %s",
                         getValueOrEmpty(row, COL_STREET_REP),
@@ -98,22 +105,30 @@ public class RppsIngestionService {
                 location.setCity(getValueOrEmpty(row, COL_CITY));
 
                 // 3. Ajout au batch
-                batch.add(mapToEntity(row, location));
-                processedIds.add(row[COL_ID_PP]);
+                if (batchMap.containsKey(rppsId)) {
+                    // Le praticien est déjà dans le lot, on ajoute juste la nouvelle adresse
+                    RppsPractitioner existingPractitioner = batchMap.get(rppsId);
+                    location.setRppsPractitioner(existingPractitioner); // Assure la relation bidirectionnelle
+                    existingPractitioner.getLocations().add(location);
+                } else {
+                    // Nouveau praticien pour ce lot
+                    RppsPractitioner newPractitioner = mapToEntity(row, location);
+                    batchMap.put(rppsId, newPractitioner);
+                }
 
                 // 4. Sauvegarde si le batch est plein
-                if (batch.size() >= BATCH_SIZE) {
-                    repository.saveAll(batch);
-                    totalSaved += batch.size();
-                    log.info("Batch sauvegardé. Total en cours : {}", totalSaved);
-                    batch.clear();
+                if (batchMap.size() >= BATCH_SIZE) {
+                    repository.saveAll(batchMap.values());
+                    totalSaved += batchMap.size();
+                    log.info("Batch sauvegardé. Total praticiens en cours : {}", totalSaved);
+                    batchMap.clear();
                 }
             }
 
-            // 5. Enregistrer le reliquat (les derniers éléments qui n'ont pas atteint 1000)
-            if (!batch.isEmpty()) {
-                repository.saveAll(batch);
-                totalSaved += batch.size();
+            // 5. Reliquat
+            if (!batchMap.isEmpty()) {
+                repository.saveAll(batchMap.values());
+                totalSaved += batchMap.size();
             }
 
             log.info("[SUCCESS] Importation terminée. {} praticiens insérés ou mis à jour.", totalSaved);
@@ -127,22 +142,17 @@ public class RppsIngestionService {
     private RppsPractitioner mapToEntity(String[] row, PracticeLocation location) {
         RppsPractitioner p = new RppsPractitioner();
         p.setRppsId(row[COL_ID_PP]);
-        p.setLastName(row[COL_LASTNAME]);
-        p.setFirstName(row[COL_FIRSTNAME]);
+        p.setName(row[COL_LASTNAME]+row[COL_FIRSTNAME]);
         p.setProfessionCode(row[COL_PROFESSION_CODE]);
         p.setSpecialtyCode(row[COL_SPECIALTY_CODE]);
+        p.setExerciceMode(row[COL_LIBELLE_EXERCICE_MODE]);
         p.setLastUpdated(LocalDateTime.now());
-        p.addLocation(location); // Assure-toi que cette méthode existe bien dans ton entité
+        p.addLocation(location);
         return p;
     }
 
-    private boolean isValid(String[] row, Set<String> processedIds) {
-        if (row == null || row.length < 40) {
-            return false;
-        }
-
-        String rppsId = row[COL_ID_PP];
-        if (processedIds.contains(rppsId)) {
+    private boolean isValid(String[] row) {
+        if (row == null || row.length < 55) {
             return false;
         }
 

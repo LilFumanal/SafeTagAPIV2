@@ -29,7 +29,7 @@ public class PracticeLocation {
     private boolean geocodingAttempted = false;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "practitioner_rpps_id", referencedColumnName = "rppsId")
-    @JsonIgnore
-    private RppsPractitioner practitioner;
+    @JoinColumn(name = "practitioner_id")
+    private RppsPractitioner rppsPractitioner;
+
 }

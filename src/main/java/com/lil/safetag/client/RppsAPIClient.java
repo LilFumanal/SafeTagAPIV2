@@ -52,6 +52,37 @@ public class RppsAPIClient {
         }
     }
 
+    public Map<String, Object> getPractitionerById(String rppsId) {
+        // 1. Construction de l'URL pour une recherche EXACTE par identifiant
+        String url = UriComponentsBuilder.fromUriString(properties.getBaseUrl())
+                .path("/Practitioner")
+                .queryParam("identifier", rppsId)
+                .build()
+                .toUriString();
+
+        // 2. Appel de l'API
+        String jsonResponse = callUrl(url);
+
+        if (jsonResponse == null || jsonResponse.isEmpty()) {
+            throw new RppsExceptions.NotFoundException("Aucune réponse de l'API pour l'ID : " + rppsId);
+        }
+
+        try {
+            // 3. Réutilisation de ton parseur existant
+            JsonNode root = mapper.readTree(jsonResponse);
+            List<Map<String, Object>> results = parsePractitioner(root);
+
+            if (results.isEmpty()) {
+                throw new RppsExceptions.NotFoundException("Praticien introuvable avec l'ID : " + rppsId);
+            }
+
+            // On retourne l'unique résultat attendu
+            return results.get(0);
+
+        } catch (JsonProcessingException e) {
+            throw new RppsExceptions.BaseException("Erreur de parsing pour le praticien ID : " + rppsId, e);
+        }
+    }
 
     public List<Map<String, Object>> searchByName(String name) {
         // 1. Construction de l'URL

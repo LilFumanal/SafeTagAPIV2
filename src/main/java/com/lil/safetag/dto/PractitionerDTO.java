@@ -7,7 +7,6 @@ public record PractitionerDTO(
         String name,
         List<String> professions,
         List<String> specialties,
-        List<String> city,
-        List<String> postalCode,
+        List<AddressDTO> practiceAddresses,
         String modeExercice
 ) {}

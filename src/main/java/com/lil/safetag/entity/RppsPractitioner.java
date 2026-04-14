@@ -22,20 +22,19 @@ public class RppsPractitioner {
     @Column(unique = true, nullable = false)
     private String rppsId;
 
-    private String lastName;
-    private String firstName;
+    private String name;
     private String professionCode;
     private String specialtyCode;
-
+    private String exerciceMode;
     // Date de dernière mise à jour pour savoir si la donnée est fraîche
     private LocalDateTime lastUpdated;
 
-    @OneToMany(mappedBy = "practitioner", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "rppsPractitioner", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PracticeLocation> locations = new ArrayList<>();
 
     // 2. La méthode utilitaire pour lier les deux côtés facilement
     public void addLocation(PracticeLocation location) {
         locations.add(location);
-        location.setPractitioner(this);
+        location.setRppsPractitioner(this);
     }
 }
