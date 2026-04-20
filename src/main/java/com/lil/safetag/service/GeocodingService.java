@@ -17,8 +17,8 @@ import java.util.List;
 public class GeocodingService {
 
     private final PracticeLocationRepository repository;
-    private final RestTemplate restTemplate = new RestTemplate();
-    private final ObjectMapper objectMapper = new ObjectMapper(); // Ajout de l'ObjectMapper
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
 
     private static final String BAN_API_URL = "https://api-adresse.data.gouv.fr/search/?q={query}&limit=1";
 

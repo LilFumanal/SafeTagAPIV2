@@ -123,7 +123,7 @@ public class PractitionerService {
         // Récupère la liste des PracticeLocation associées à l'entité
         // Assurez-vous que l'entité RppsPractitioner a une méthode getLocations() qui retourne List<PracticeLocation>
         List<AddressDTO> addresses = entity.getLocations().stream()
-                .map(location -> new AddressDTO(location.getFacilityName(), location.getStreetNumber(), location.getStreet(), location.getCity(), location.getZipCode(), location.getLatitude(), location.getLongitude())) // Crée un AddressDTO pour chaque location
+                .map(location -> new AddressDTO(location.getFacilityName(), location.getStreetNumber(), location.getStreet(), location.getZipCode(), location.getCity(), location.getLatitude(), location.getLongitude())) // Crée un AddressDTO pour chaque location
                 .collect(Collectors.toList()); // Collecte les DTO d'adresse dans une liste
 
         // 2. Préparation des professions et spécialités en List<String>

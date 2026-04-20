@@ -4,7 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lil.safetag.exception.RppsExceptions;
-import org.jspecify.annotations.Nullable;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -17,6 +19,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.*;
 
+@Slf4j
 @Service
 public class RppsAPIClient {
 
@@ -24,12 +27,14 @@ public class RppsAPIClient {
     private final RppsProperties properties;
     private static final ObjectMapper mapper = new ObjectMapper();
 
+    private static final String RESILIENCE_INSTANCE = "rppsApi";
+
     public RppsAPIClient(RppsProperties properties) {
         this.restTemplate = new RestTemplate();
         this.properties = properties;
     }
 
-    private @Nullable String callUrl(String url) {
+    private String callUrl(String url) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.set("ESANTE-API-KEY", properties.getApiKey());
@@ -52,120 +57,102 @@ public class RppsAPIClient {
         }
     }
 
+    // --- Search Methods (avec Fallback & Retry) ---
+
+    @Retry(name = RESILIENCE_INSTANCE, fallbackMethod = "fallbackGetPractitionerById")
+    @CircuitBreaker(name = RESILIENCE_INSTANCE)
     public Map<String, Object> getPractitionerById(String rppsId) {
-        // 1. Construction de l'URL pour une recherche EXACTE par identifiant
         String url = UriComponentsBuilder.fromUriString(properties.getBaseUrl())
                 .path("/Practitioner")
                 .queryParam("identifier", rppsId)
-                .build()
-                .toUriString();
+                .build().toUriString();
 
-        // 2. Appel de l'API
         String jsonResponse = callUrl(url);
-
         if (jsonResponse == null || jsonResponse.isEmpty()) {
             throw new RppsExceptions.NotFoundException("Aucune réponse de l'API pour l'ID : " + rppsId);
         }
 
         try {
-            // 3. Réutilisation de ton parseur existant
-            JsonNode root = mapper.readTree(jsonResponse);
-            List<Map<String, Object>> results = parsePractitioner(root);
-
+            List<Map<String, Object>> results = parsePractitioner(mapper.readTree(jsonResponse));
             if (results.isEmpty()) {
                 throw new RppsExceptions.NotFoundException("Praticien introuvable avec l'ID : " + rppsId);
             }
-
-            // On retourne l'unique résultat attendu
             return results.get(0);
-
         } catch (JsonProcessingException e) {
             throw new RppsExceptions.BaseException("Erreur de parsing pour le praticien ID : " + rppsId, e);
         }
     }
 
+    @Retry(name = RESILIENCE_INSTANCE)
+    @CircuitBreaker(name = RESILIENCE_INSTANCE, fallbackMethod = "fallbackSearchList")
     public List<Map<String, Object>> searchByName(String name) {
-        // 1. Construction de l'URL
         String url = UriComponentsBuilder.fromUriString(properties.getBaseUrl())
                 .path("/Practitioner")
                 .queryParam("name", name)
-                .build()
-                .toUriString();
+                .build().toUriString();
 
-        // 2. Appel via ta méthode callUrl (qui gère l'API Key)
         String jsonResponse = callUrl(url);
-
-        // 3. Traitement de la réponse
-        if (jsonResponse == null || jsonResponse.isEmpty()) {
-            return Collections.emptyList();
-        }
+        if (jsonResponse == null || jsonResponse.isEmpty()) return Collections.emptyList();
 
         try {
-            // On utilise ton 'mapper' statique existant
-            JsonNode root = mapper.readTree(jsonResponse);
-            return parsePractitioner(root);
+            return parsePractitioner(mapper.readTree(jsonResponse));
         } catch (JsonProcessingException e) {
             throw new RppsExceptions.BaseException("Erreur de formatage JSON lors de la recherche par nom", e);
         }
     }
 
+    @Retry(name = RESILIENCE_INSTANCE)
+    @CircuitBreaker(name = RESILIENCE_INSTANCE, fallbackMethod = "fallbackSearchMap")
     public Map<String, String> searchPractitionerRole(String practitionerId) {
-        String url = properties.getBaseUrl() + "/PractitionerRole?practitioner=" + practitionerId;
-        String data = callUrl(url);
-        Map<String, String> role = parsePractitionerRole(data);
-        if (role == null) {
-            throw new RppsExceptions.NotFoundException("Aucun rôle actif trouvé pour le praticien : " + practitionerId);
-        }
-        return role;
-    }
-
-    public Map<String, String> searchOrganization(String organizationId) {
-        String url = properties.getBaseUrl() + "/Organization?identifier=" + organizationId;
-        String data = callUrl(url);
-        Map<String, String> org = parseOrganization(data);
-        if (org == null) {
-            throw new RppsExceptions.NotFoundException("Organisation non trouvée : " + organizationId);
-        }
-        return org;
-    }
-
-    // --- Bulk searches ---
-
-    public List<Map<String, Object>> searchByLocation(String location) {
-        boolean isPostalCode = location.matches("\\d+");
-
-        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(properties.getBaseUrl())
+        String url = UriComponentsBuilder.fromUriString(properties.getBaseUrl())
                 .path("/PractitionerRole")
-                .queryParam("_count", 20)
-                // On demande à l'API d'inclure les données du Praticien lié
-                .queryParam("_include", "PractitionerRole:practitioner");
+                .queryParam("practitioner", practitionerId)
+                .build().toUriString();
 
-        builder.queryParam("address", location);
-        System.out.println("Appel RPPS : " + builder.toUriString());
-        String jsonResponse = callUrl(builder.toUriString());
-
+        String jsonResponse = callUrl(url);
         if (jsonResponse == null || jsonResponse.isEmpty()) {
-            return Collections.emptyList();
+            throw new RppsExceptions.NotFoundException("Aucun rôle actif trouvé pour le praticien : " + practitionerId);
         }
 
         try {
-            JsonNode root = mapper.readTree(jsonResponse);
-            return parsePractitioner(root); // On réutilise ton parseur existant
+            Map<String, String> role = parsePractitionerRole(mapper.readTree(jsonResponse));
+            if (role == null) throw new RppsExceptions.NotFoundException("Aucun rôle actif trouvé pour le praticien : " + practitionerId);
+            return role;
         } catch (JsonProcessingException e) {
-            throw new RppsExceptions.BaseException("Erreur parsing recherche localisation", e);
+            throw new RppsExceptions.BaseException("Erreur parsing PractitionerRole", e);
         }
     }
 
+    // --- Fallbacks Methods ---
+
+    public Map<String, Object> fallbackGetPractitionerById(String rppsId, Throwable t) {
+        if (t instanceof RppsExceptions.NotFoundException) {
+            throw (RppsExceptions.NotFoundException) t;
+        }
+        log.warn("Fallback activé pour getPractitionerById (API indisponible) - RPPS: {}. Erreur: {}", rppsId, t.getMessage());
+        return Collections.emptyMap();
+    }
+
+    public List<Map<String, Object>> fallbackSearchList(String param, Throwable t) {
+        log.warn("Fallback activé pour recherche liste (param: {}) - Erreur: {}", param, t.getMessage());
+        return Collections.emptyList();
+    }
+
+    public Map<String, String> fallbackSearchMap(String param, Throwable t) {
+        if (t instanceof RppsExceptions.NotFoundException) {
+            throw (RppsExceptions.NotFoundException) t;
+        }
+        log.warn("Fallback activé pour recherche map (param: {}) - Erreur: {}", param, t.getMessage());
+        return Collections.emptyMap();
+    }
+
     // --- Parsing Methods ---
+
     public List<Map<String, Object>> parsePractitioner(JsonNode root) {
         List<Map<String, Object>> practitioners = new ArrayList<>();
-
-        // Plus besoin de mapper.readTree() car le travail est déjà fait
         JsonNode entries = root.path("entry");
 
-        if (!entries.isArray()) {
-            return practitioners;
-        }
+        if (!entries.isArray()) return practitioners;
 
         for (JsonNode entry : entries) {
             JsonNode resource = entry.path("resource");
@@ -174,7 +161,6 @@ public class RppsAPIClient {
 
             if (id == null) continue;
 
-            // Extraction du nom (plus court avec path)
             JsonNode nameNode = resource.path("name").get(0);
             String family = nameNode.path("family").asText("");
             String given = nameNode.path("given").path(0).asText("");
@@ -189,11 +175,8 @@ public class RppsAPIClient {
                     String code = coding.path("code").asText(null);
 
                     if (code != null) {
-                        if (system.contains("TRE_G15")) {
-                            professionCodes.add(code);
-                        } else if (system.contains("TRE_R38")) {
-                            specialtyCodes.add(code);
-                        }
+                        if (system.contains("TRE_G15")) professionCodes.add(code);
+                        else if (system.contains("TRE_R38")) specialtyCodes.add(code);
                     }
                 }
             }
@@ -209,89 +192,49 @@ public class RppsAPIClient {
         return practitioners;
     }
 
-    public Map<String, String> parsePractitionerRole(String json) {
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode root = mapper.readTree(json);
+    public Map<String, String> parsePractitionerRole(JsonNode root) {
+        int total = root.path("total").asInt();
+        if (total == 0) return null;
 
-            int total = root.path("total").asInt();
-            if (total == 0) {
-                return null;
-            }
+        for (JsonNode entry : root.path("entry")) {
+            JsonNode resource = entry.path("resource");
 
-            JsonNode entries = root.path("entry");
-            for (JsonNode entry : entries) {
-                JsonNode resource = entry.path("resource");
+            if (!resource.path("active").asBoolean(false)) continue;
 
-                // ✅ filtre active
-                boolean active = resource.path("active").asBoolean(false);
-                if (!active) {
-                    continue;
+            Map<String, String> roleData = new HashMap<>();
+            String organizationId = resource.path("organization").path("identifier").path("value").asText(null);
+            roleData.put("organizationId", organizationId);
+
+            for (JsonNode code : resource.path("code")) {
+                for (JsonNode coding : code.path("coding")) {
+                    String system = coding.path("system").asText();
+                    String display = coding.path("display").asText();
+
+                    if (system.contains("TRE_R22")) roleData.put("genreActivite", display);
+                    else if (system.contains("TRE_R23")) roleData.put("modeExercice", display);
+                    else if (system.contains("TRE_R21")) roleData.put("fonction", display);
                 }
-                Map<String, String> roleData = new HashMap<>();
-                // ✅ organisation
-                String organizationId = resource
-                        .path("organization")
-                        .path("identifier")
-                        .path("value")
-                        .asText(null);
-
-                roleData.put("organizationId", organizationId);
-
-                JsonNode codes = resource.path("code");
-
-                for (JsonNode code : codes) {
-                    JsonNode codings = code.path("coding");
-
-                    for (JsonNode coding : codings) {
-                        String system = coding.path("system").asText();
-                        String display = coding.path("display").asText();
-
-                        if (system.contains("TRE_R22")) {
-                            roleData.put("genreActivite", display);
-                        } else if (system.contains("TRE_R23")) {
-                            roleData.put("modeExercice", display);
-                        } else if (system.contains("TRE_R21")) {
-                            roleData.put("fonction", display);
-                        }
-                    }
-                }
-                return roleData; // ✅ premier actif uniquement
             }
-
-            return null;
-
-        } catch (JsonProcessingException e) {
-            throw new RppsExceptions.BaseException("Erreur parsing PractitionerRole", e);
+            return roleData;
         }
+        return null;
     }
 
-    public Map<String, String> parseOrganization(String json) {
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode root = mapper.readTree(json);
+    public Map<String, String> parseOrganization(JsonNode root) {
+        JsonNode entries = root.path("entry");
+        if (!entries.isArray() || entries.isEmpty()) return null;
 
-            JsonNode entries = root.path("entry");
-            if (!entries.isArray() || entries.isEmpty()) return null;
+        JsonNode addressArray = entries.get(0).path("resource").path("address");
+        if (!addressArray.isArray() || addressArray.isEmpty()) return null;
 
-            JsonNode resource = entries.get(0).path("resource");
+        JsonNode address = addressArray.get(0);
+        Map<String, String> result = new HashMap<>();
+        result.put("city", address.path("city").asText(null));
+        result.put("postalCode", address.path("postalCode").asText(null));
 
-            JsonNode addressArray = resource.path("address");
-            if (!addressArray.isArray() || addressArray.isEmpty()) return null;
-
-            JsonNode address = addressArray.get(0);
-
-            String city = address.path("city").asText(null);
-            String postalCode = address.path("postalCode").asText(null);
-
-            Map<String, String> result = new HashMap<>();
-            result.put("city", city);
-            result.put("postalCode", postalCode);
-
-            return result;
-
-        } catch (JsonProcessingException e) {
-            throw new RppsExceptions.BaseException("Erreur parsing Organization", e);
-        }
+        return result;
+    }
+    RestTemplate getRestTemplate() {
+        return this.restTemplate;
     }
 }

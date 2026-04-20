@@ -28,9 +28,8 @@ public class CSVClient {
     }
 
     /**
-     * Récupère le flux d'entrée du fichier distant (GZ ou CSV).
-     * On utilise Mono<Resource> pour streamer le contenu sans le stocker en RAM.
-     */
+     * Récupère le flux d'entrée du fichier distant ( CSV).
+    */
     public InputStream downloadRppsFile() throws IOException, InterruptedException {
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(30)) //Timeout connexion
@@ -42,8 +41,6 @@ public class CSVClient {
                 .timeout(Duration.ofMinutes(timeoutMinutes)) // Timeout global
                 .GET()
                 .build();
-
-        // ofInputStream() stream directement la réponse HTTP
         HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
 
         if (response.statusCode() != 200) {

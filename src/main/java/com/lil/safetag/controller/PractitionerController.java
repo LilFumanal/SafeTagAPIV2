@@ -37,7 +37,13 @@ public class PractitionerController {
 
     // 2. Consultation unitaire : Base locale + Mise à jour API e-santé (Opportuniste)
     @GetMapping("/{rppsId}")
-    public PractitionerDTO getPractitioner(@PathVariable String rppsId) {
-        return practitionerService.getAndUpdatePractitioner(rppsId);
+    public ResponseEntity<PractitionerDTO> getPractitioner(@PathVariable String rppsId) {
+        PractitionerDTO practitioner = practitionerService.getAndUpdatePractitioner(rppsId);
+        if (practitioner == null) {
+            // Si le service retourne null, on renvoie 404
+            return ResponseEntity.notFound().build();
+        }
+        // Sinon, on renvoie 200 OK avec le praticien
+        return ResponseEntity.ok(practitioner);
     }
 }

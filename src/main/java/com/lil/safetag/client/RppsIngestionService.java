@@ -9,6 +9,7 @@ import com.opencsv.CSVReaderBuilder;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
@@ -18,6 +19,8 @@ import java.util.*;
 @Service
 @Slf4j
 public class RppsIngestionService {
+    @Value("${safetag.rpps.import.limit:-1}")
+    private int importLimit;
 
     // Constantes métier - CODES PROFESSION SANTÉ MENTALE & ADDICTOLOGIE
     // 10 = Médecin (inclut psychiatres avec spécialités SM04/SM54)
@@ -81,8 +84,8 @@ public class RppsIngestionService {
 
             while ((row = csvReader.readNext()) != null) {
                 // BLOC DE TEST : Arrêt après 100 lignes
-                if (lineCount >= 100) {
-                    log.info("[DEBUG] 100 lignes atteintes, arrêt de la lecture.");
+                if (importLimit > 0 && lineCount >= importLimit) {
+                    log.info("[DEBUG] Limite de {} lignes atteinte, arrêt de la lecture.", importLimit);
                     break;
                 }
                 lineCount++;
