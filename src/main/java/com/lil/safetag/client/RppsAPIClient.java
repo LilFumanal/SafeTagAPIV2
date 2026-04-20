@@ -7,6 +7,7 @@ import com.lil.safetag.exception.RppsExceptions;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -58,7 +59,7 @@ public class RppsAPIClient {
     }
 
     // --- Search Methods (avec Fallback & Retry) ---
-
+    @Cacheable(value = "practitioners", key = "#rppsId")
     @Retry(name = RESILIENCE_INSTANCE, fallbackMethod = "fallbackGetPractitionerById")
     @CircuitBreaker(name = RESILIENCE_INSTANCE)
     public Map<String, Object> getPractitionerById(String rppsId) {
@@ -98,28 +99,6 @@ public class RppsAPIClient {
             return parsePractitioner(mapper.readTree(jsonResponse));
         } catch (JsonProcessingException e) {
             throw new RppsExceptions.BaseException("Erreur de formatage JSON lors de la recherche par nom", e);
-        }
-    }
-
-    @Retry(name = RESILIENCE_INSTANCE)
-    @CircuitBreaker(name = RESILIENCE_INSTANCE, fallbackMethod = "fallbackSearchMap")
-    public Map<String, String> searchPractitionerRole(String practitionerId) {
-        String url = UriComponentsBuilder.fromUriString(properties.getBaseUrl())
-                .path("/PractitionerRole")
-                .queryParam("practitioner", practitionerId)
-                .build().toUriString();
-
-        String jsonResponse = callUrl(url);
-        if (jsonResponse == null || jsonResponse.isEmpty()) {
-            throw new RppsExceptions.NotFoundException("Aucun rôle actif trouvé pour le praticien : " + practitionerId);
-        }
-
-        try {
-            Map<String, String> role = parsePractitionerRole(mapper.readTree(jsonResponse));
-            if (role == null) throw new RppsExceptions.NotFoundException("Aucun rôle actif trouvé pour le praticien : " + practitionerId);
-            return role;
-        } catch (JsonProcessingException e) {
-            throw new RppsExceptions.BaseException("Erreur parsing PractitionerRole", e);
         }
     }
 
