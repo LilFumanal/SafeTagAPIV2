@@ -6,10 +6,10 @@ import org.springframework.cache.annotation.EnableCaching;
 
 @SpringBootApplication
 @EnableCaching
-public class SafeTagApiv2Application {
+public class SafeTagRPPSService {
 
     public static void main(String[] args) {
-        SpringApplication.run(SafeTagApiv2Application.class, args);
+        SpringApplication.run(SafeTagRPPSService.class, args);
     }
 
 

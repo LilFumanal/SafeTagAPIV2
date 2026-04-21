@@ -1,6 +1,7 @@
 package com.lil.safetag.client;
 
 import com.lil.safetag.repository.RppsPractitionerRepository;
+import com.lil.safetag.service.RppsIngestionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

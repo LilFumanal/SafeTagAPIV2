@@ -1,5 +1,6 @@
-package com.lil.safetag.client;
+package com.lil.safetag.service;
 
+import com.lil.safetag.client.CSVClient;
 import com.lil.safetag.entity.PracticeLocation;
 import com.lil.safetag.entity.RppsPractitioner;
 import com.lil.safetag.repository.RppsPractitionerRepository;

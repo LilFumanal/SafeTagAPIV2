@@ -3,6 +3,7 @@ package com.lil.safetag.client;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lil.safetag.config.RppsProperties;
 import com.lil.safetag.exception.RppsExceptions;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;

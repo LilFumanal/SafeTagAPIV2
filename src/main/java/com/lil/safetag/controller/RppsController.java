@@ -1,13 +1,11 @@
 package com.lil.safetag.controller;
 
-import com.lil.safetag.client.RppsIngestionService;
+import com.lil.safetag.service.RppsIngestionService;
 import com.lil.safetag.entity.RppsPractitioner;
 import com.lil.safetag.repository.RppsPractitionerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/rpps")

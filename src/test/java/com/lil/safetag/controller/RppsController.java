@@ -1,6 +1,6 @@
 package com.lil.safetag.controller;
 
-import com.lil.safetag.client.RppsIngestionService;
+import com.lil.safetag.service.RppsIngestionService;
 import com.lil.safetag.entity.RppsPractitioner;
 import com.lil.safetag.repository.RppsPractitionerRepository;
 import org.junit.jupiter.api.Test;
