@@ -9,7 +9,7 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.example</groupId>
-    <artifactId>SafeTagAPIV2</artifactId>
+    <artifactId>SafeTagV2RPPSService</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>SafeTagAPIV2</name>
     <description>SafeTagAPIV2</description>
