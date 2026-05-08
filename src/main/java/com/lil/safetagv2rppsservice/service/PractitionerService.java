@@ -5,6 +5,7 @@ import com.lil.safetagv2rppsservice.dto.AddressDTO; // Import du DTO d'adresse
 import com.lil.safetagv2rppsservice.dto.PractitionerDTO;
 import com.lil.safetagv2rppsservice.entity.RppsPractitioner;
 import com.lil.safetagv2rppsservice.repository.RppsPractitionerRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -146,5 +147,10 @@ public class PractitionerService {
                 addresses, // Utilisation de la liste d'AddressDTO mappée
                 displayModeExercice
         );
+    }
+
+    @Cacheable(value = "professions")
+    public List<String> getAllProfessions() {
+        return repository.findDistinctProfessionLabels();
     }
 }

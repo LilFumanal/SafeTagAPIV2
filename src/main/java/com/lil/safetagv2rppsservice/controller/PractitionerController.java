@@ -7,6 +7,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("api/v1/practitioners") // On garde ton chemin initial pour ne pas casser tes tests
 public class PractitionerController {
@@ -43,4 +45,12 @@ public class PractitionerController {
         // Sinon, on renvoie 200 OK avec le praticien
         return ResponseEntity.ok(practitioner);
     }
+
+    // Dans ton RppsController
+    @GetMapping("/professions")
+    public ResponseEntity<List<String>> getProfessions() {
+        List<String> professions = practitionerService.getAllProfessions();
+        return ResponseEntity.ok(professions);
+    }
+
 }

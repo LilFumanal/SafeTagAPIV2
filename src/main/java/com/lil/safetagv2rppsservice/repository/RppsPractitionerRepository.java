@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -34,4 +35,9 @@ public interface RppsPractitionerRepository extends JpaRepository<RppsPractition
                                                @Param("longitude") Double longitude,
                                                @Param("radius") Double radius,
                                                Pageable pageable);
+
+    // Dans RppsPractitionerRepository
+    @Query("SELECT DISTINCT p.professionCode FROM RppsPractitioner p WHERE p.professionCode IS NOT NULL ORDER BY p.professionCode ASC")
+    List<String> findDistinctProfessionLabels();
+
 }
