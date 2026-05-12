@@ -33,6 +33,12 @@ public class RppsIngestionService {
     // 94 = Ergothérapeute (rééducation psychomotrice et cognitive)
     // 95 = Psychomotricien (troubles psychomoteurs et relationnels)
     private static final List<String> ALLOWED_ROLES = List.of("10", "93", "94", "95");
+    private static final Map<String, String> PROFESSION_LABELS = Map.of(
+            "10", "Psychiatre",
+            "93", "Psychologue",
+            "94", "Ergothérapeute",
+            "95", "Psychomotricien"
+    );
 
     // CODES SPÉCIALITÉ/SAVOIR-FAIRE (préfixe SM)
     // SM04 = Psychiatrie générale (adultes)
@@ -46,7 +52,16 @@ public class RppsIngestionService {
     private static final List<String> ALLOWED_SPECIALTIES = List.of(
             "SM04", "SM54", "SM33", "SM93", "SM26", "SM53",  "SM70", "SM65"
     );
-
+    private static final Map<String, String> SPECIALTY_LABELS = Map.of(
+            "SM04", "Psychiatre",
+            "SM54", "Pédopsychiatre",
+            "SM33", "Addictologue",
+            "SM93", "Psychologue clinicien",
+            "SM26", "Thérapeute familial",
+            "SM53", "Pédopsychiatre (anc.)",
+            "SM70", "Sexologue",
+            "SM65", "Hypnothérapeute"
+    );
     // Index de base
     private static final int COL_ID_PP = 1;           // Identifiant PP
     private static final int COL_LASTNAME = 7;        // Nom d'exercice
@@ -194,14 +209,18 @@ public class RppsIngestionService {
         }
 
         String professionCode = row[COL_PROFESSION_CODE];
+
+        // 1. Si le métier n'est pas dans notre liste globale, on rejette
         if (!ALLOWED_ROLES.contains(professionCode)) {
             return false;
         }
 
-        if ("93".equals(professionCode)) {
+        // 2. Pour 93 (Psychologue), 94 (Ergo) et 95 (Psychomotricien), on valide directement
+        if ("93".equals(professionCode) || "94".equals(professionCode) || "95".equals(professionCode)) {
             return true;
         }
 
+        // 3. Pour 10 (Médecin), on vérifie obligatoirement la spécialité (Psychiatrie/Addicto)
         if ("10".equals(professionCode)) {
             String specialtyCode = row[COL_SPECIALTY_CODE];
             return ALLOWED_SPECIALTIES.contains(specialtyCode);
@@ -209,6 +228,7 @@ public class RppsIngestionService {
 
         return false;
     }
+
 
     private String getValueOrEmpty(String[] row, int index) {
         return (row.length > index && row[index] != null) ? row[index].trim() : "";

@@ -36,8 +36,9 @@ public interface RppsPractitionerRepository extends JpaRepository<RppsPractition
                                                @Param("radius") Double radius,
                                                Pageable pageable);
 
-    // Dans RppsPractitionerRepository
-    @Query("SELECT DISTINCT p.professionCode FROM RppsPractitioner p WHERE p.professionCode IS NOT NULL ORDER BY p.professionCode ASC")
-    List<String> findDistinctProfessionLabels();
+
+    @Query("SELECT DISTINCT p.professionCode, p.specialtyCode FROM RppsPractitioner p " +
+            "WHERE p.professionCode IN ('10', '93', '94', '95')")
+    List<Object[]> findDistinctProfessionAndSpecialtyCodes();
 
 }

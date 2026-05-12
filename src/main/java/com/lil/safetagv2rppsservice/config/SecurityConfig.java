@@ -29,8 +29,10 @@ public class SecurityConfig {
         return http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
-                // On ajoute le filtre qui lit les headers juste ici
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/api/v1/practitioners/**").permitAll() // <-- Ouvre toutes les routes praticiens
+                        .anyRequest().authenticated()
+                )
                 .addFilterBefore(new GatewayHeaderFilter(), UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
@@ -41,7 +43,6 @@ public class SecurityConfig {
                 throws ServletException, IOException {
 
             String userId = request.getHeader("X-User-Id");
-            System.out.println("Import lancé par : " + userId);
             String role = request.getHeader("X-User-Role");
 
             if (userId != null && role != null) {

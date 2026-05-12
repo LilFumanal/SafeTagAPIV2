@@ -1,6 +1,7 @@
 package com.lil.safetagv2rppsservice.controller;
 
 import com.lil.safetagv2rppsservice.dto.PractitionerDTO;
+import com.lil.safetagv2rppsservice.dto.ProfessionDTO;
 import com.lil.safetagv2rppsservice.service.PractitionerService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -10,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("api/v1/practitioners") // On garde ton chemin initial pour ne pas casser tes tests
+@RequestMapping("/api/v1/practitioners") // On garde ton chemin initial pour ne pas casser tes tests
 public class PractitionerController {
 
     private final PractitionerService practitionerService;
@@ -35,7 +36,7 @@ public class PractitionerController {
     }
 
     // 2. Consultation unitaire : Base locale + Mise à jour API e-santé (Opportuniste)
-    @GetMapping("/{rppsId}")
+    @GetMapping("/{rppsId:\\d+}")
     public ResponseEntity<PractitionerDTO> getPractitioner(@PathVariable String rppsId) {
         PractitionerDTO practitioner = practitionerService.getAndUpdatePractitioner(rppsId);
         if (practitioner == null) {
@@ -47,9 +48,10 @@ public class PractitionerController {
     }
 
     // Dans ton RppsController
-    @GetMapping("/professions")
-    public ResponseEntity<List<String>> getProfessions() {
-        List<String> professions = practitionerService.getAllProfessions();
+    @GetMapping("references/professions")
+    public ResponseEntity<List<ProfessionDTO>> getProfessions() {
+        List<ProfessionDTO> professions = practitionerService.getAllProfessions();
+        System.out.println("DEBUG - Professions trouvées : " + professions.size() + " -> " + professions);
         return ResponseEntity.ok(professions);
     }
 

@@ -3,6 +3,7 @@ package com.lil.safetagv2rppsservice.service;
 import com.lil.safetagv2rppsservice.client.RppsAPIClient;
 import com.lil.safetagv2rppsservice.dto.AddressDTO; // Import du DTO d'adresse
 import com.lil.safetagv2rppsservice.dto.PractitionerDTO;
+import com.lil.safetagv2rppsservice.dto.ProfessionDTO;
 import com.lil.safetagv2rppsservice.entity.RppsPractitioner;
 import com.lil.safetagv2rppsservice.repository.RppsPractitionerRepository;
 import org.springframework.cache.annotation.Cacheable;
@@ -12,10 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors; // Nécessaire pour le stream
 
 @Service
@@ -149,8 +147,40 @@ public class PractitionerService {
         );
     }
 
+    private static final Map<String, String> PROFESSION_LABELS = Map.of(
+            "93", "Psychologue",
+            "94", "Ergothérapeute",
+            "95", "Psychomotricien"
+    );
+
+    private static final Map<String, String> SPECIALTY_LABELS = Map.of(
+            "SM04", "Psychiatre",
+            "SM54", "Pédopsychiatre",
+            "SM33", "Addictologue",
+            "SM93", "Psychologue clinicien",
+            "SM70", "Sexologue"
+            // ... ajoute les autres ici
+    );
+
     @Cacheable(value = "professions")
-    public List<String> getAllProfessions() {
-        return repository.findDistinctProfessionLabels();
+    public List<ProfessionDTO> getAllProfessions() {
+        List<Object[]> results = repository.findDistinctProfessionAndSpecialtyCodes();
+
+        return results.stream()
+                .map(row -> {
+                    String profCode = (String) row[0];
+                    String specCode = (String) row[1];
+
+                    if ("10".equals(profCode)) {
+                        // Pour les médecins, on utilise le code spécialité comme identifiant
+                        return new ProfessionDTO(specCode, SPECIALTY_LABELS.getOrDefault(specCode, null));
+                    } else {
+                        // Pour les autres, on utilise le code profession
+                        return new ProfessionDTO(profCode, PROFESSION_LABELS.getOrDefault(profCode, "Autre professionnel"));
+                    }
+                })
+                .distinct() // Pour éviter les doublons si plusieurs médecins ont la même spécialité
+                .sorted(Comparator.comparing(ProfessionDTO::label))
+                .toList();
     }
 }
